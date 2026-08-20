@@ -12,6 +12,8 @@
     '#' + APP_ID + '{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;max-width:1100px;margin:16px auto;padding:16px;border:1px solid #d8dee6;border-radius:10px;background:#fff;color:#222;box-sizing:border-box}',
     '#' + APP_ID + ' *{box-sizing:border-box}',
     '#' + APP_ID + ' h2{margin:0 0 8px;font-size:22px}',
+    '#' + APP_ID + ' h3{margin:16px 0 6px;font-size:16px}',
+    '#' + APP_ID + ' h4{margin:12px 0 6px;font-size:14px}',
     '#' + APP_ID + ' .ra-note{margin:0 0 14px;color:#555;font-size:13px;line-height:1.65}',
     '#' + APP_ID + ' details{border:1px solid #d8dee6;border-radius:8px;margin:10px 0;background:#fafbfc}',
     '#' + APP_ID + ' summary{cursor:pointer;font-weight:700;padding:10px 12px;background:#f1f3f5;border-radius:8px}',
@@ -25,6 +27,10 @@
     '#' + APP_ID + ' .ra-motion-row{display:grid;grid-template-columns:90px 1fr 120px;gap:8px;align-items:start;margin:8px 0}',
     '#' + APP_ID + ' .ra-motion-name{font-weight:700;padding-top:9px}',
     '#' + APP_ID + ' .ra-hit textarea{text-align:center;min-height:72px}',
+    '#' + APP_ID + ' .ra-special{border-top:1px dashed #cbd3dc;margin-top:14px;padding-top:8px}',
+    '#' + APP_ID + ' .ra-special-head{display:flex;align-items:center;justify-content:space-between;gap:8px}',
+    '#' + APP_ID + ' .ra-special-row{position:relative}',
+    '#' + APP_ID + ' .ra-special-row .ra-remove{position:absolute;right:0;top:-2px;padding:3px 8px;font-size:12px}',
     '#' + APP_ID + ' .ra-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}',
     '#' + APP_ID + ' button{border:1px solid #9aa7b4;background:#f5f7f9;color:#222;border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:600}',
     '#' + APP_ID + ' button:hover{background:#e9edf1}',
@@ -41,7 +47,7 @@
   root.id = APP_ID;
   root.innerHTML = [
     '<h2>FGO モーション・オートフィル</h2>',
-    '<p class="ra-note">通常モーション1種と差分モーション最大2種を生成します。差分では未入力のBattle Character・スキル・Battle Motion行を自動で省略します。モーション欄とHit欄は「1行＝1工程」で対応し、Hit欄の数字には出力時に自動で「Hit」を付けます。</p>',
+    '<p class="ra-note">通常モーション1種と差分モーション最大2種を生成します。スキル・Buster・Arts・Quickは通常/差分とも未入力行を出力しません。EX・宝具は「追加」で必要数だけ増やせます。モーション欄とHit欄は「1行＝1工程」で対応し、Hit欄の数字には出力時に自動で「Hit」を付けます。</p>',
     '<details open>',
       '<summary>出力設定</summary>',
       '<div class="ra-body ra-grid">',
@@ -79,13 +85,46 @@
     });
   }
 
+  function motionInputHtml(key, label) {
+    return [
+      '<div class="ra-motion-row">',
+        '<div class="ra-motion-name">' + escHtml(label) + '</div>',
+        '<textarea data-key="' + key + '" aria-label="' + escHtml(label) + ' モーション" placeholder="1行＝1工程"></textarea>',
+        '<div class="ra-hit"><textarea data-key="' + key + 'Hit" aria-label="' + escHtml(label) + ' Hit数" placeholder="2\n1+1"></textarea></div>',
+      '</div>'
+    ].join('');
+  }
+
+  function specialVariantHtml(kind, index) {
+    var label = kind === 'ex' ? 'EX' : '宝具';
+    return [
+      '<div class="ra-special-row" data-special-row="' + kind + '" data-index="' + index + '">',
+        '<button class="ra-remove" type="button" data-remove-special="' + kind + '">削除</button>',
+        motionInputHtml(kind + index, label + ' ' + index),
+      '</div>'
+    ].join('');
+  }
+
+  function specialSectionHtml(kind) {
+    var label = kind === 'ex' ? 'EX' : '宝具';
+    return [
+      '<div class="ra-special" data-special="' + kind + '">',
+        '<div class="ra-special-head">',
+          '<h4>' + label + '</h4>',
+          '<button type="button" data-add-special="' + kind + '">' + label + 'を追加</button>',
+        '</div>',
+        '<div data-special-list="' + kind + '">',
+          specialVariantHtml(kind, 1),
+        '</div>',
+      '</div>'
+    ].join('');
+  }
+
   function groupHtml(index, label) {
     var rows = '';
     cardKinds.forEach(function (kind) {
       for (var i = 1; i <= 3; i++) rows += motionInputHtml(kind.toLowerCase() + i, kind + ' ' + i);
     });
-    rows += motionInputHtml('ex', 'EX');
-    rows += motionInputHtml('np', '宝具');
 
     return [
       '<details class="ra-group" data-group="' + index + '" ' + (index === 1 ? 'open' : '') + '>',
@@ -99,21 +138,13 @@
             '<div class="ra-field"><label>スキル使用 2</label><textarea data-key="skill2"></textarea></div>',
             '<div class="ra-field"><label>スキル使用 3</label><textarea data-key="skill3"></textarea></div>',
           '</div>',
-          '<h3 style="margin:16px 0 6px;font-size:16px">Battle Motion</h3>',
-          '<div class="ra-note">モーションとHitは行番号で対応します。Hitがない工程はHit欄を空行にしてください。例：Hit欄に「2」「1+1」と入力すると「2Hit」「1+1Hit」と出力します。</div>',
+          '<h3>Battle Motion</h3>',
+          '<div class="ra-note">Q/A/Bの未入力行は生成時に削除します。EX・宝具は必要数だけ追加できます。Hitがない工程はHit欄を空行にしてください。</div>',
           rows,
+          specialSectionHtml('ex'),
+          specialSectionHtml('np'),
         '</div>',
       '</details>'
-    ].join('');
-  }
-
-  function motionInputHtml(key, label) {
-    return [
-      '<div class="ra-motion-row">',
-        '<div class="ra-motion-name">' + escHtml(label) + '</div>',
-        '<textarea data-key="' + key + '" aria-label="' + escHtml(label) + ' モーション" placeholder="1行＝1工程"></textarea>',
-        '<div class="ra-hit"><textarea data-key="' + key + 'Hit" aria-label="' + escHtml(label) + ' Hit数" placeholder="2\n1+1"></textarea></div>',
-      '</div>'
     ].join('');
   }
 
@@ -122,10 +153,6 @@
     groupHtml(2, '差分モーション1'),
     groupHtml(3, '差分モーション2')
   ].join('');
-
-  function allFieldElements() {
-    return Array.prototype.slice.call(root.querySelectorAll('input, textarea'));
-  }
 
   function setStatus(text, isError) {
     statusEl.textContent = text || '';
@@ -160,9 +187,9 @@
     return lines.join('&br()');
   }
 
-  function motionCell(value, blankTemplate) {
+  function motionCell(value) {
     var lines = motionLines(value);
-    if (!lines.length) return blankTemplate ? ' →&br() →&br()' : '';
+    if (!lines.length) return '';
     return lines.join(' →&br()');
   }
 
@@ -173,7 +200,7 @@
     return token + 'Hit';
   }
 
-  function hitCell(hitValue, motionValue, blankTemplate) {
+  function hitCell(hitValue, motionValue) {
     var raw = normalizeNewlines(hitValue);
     var hitLines = raw === '' ? [] : raw.split('\n').map(formatHitToken);
     var motionCount = motionLines(motionValue).length;
@@ -181,7 +208,6 @@
     var hasHit = hitLines.some(function (line) { return line !== ''; });
 
     if (!hasHit) {
-      if (blankTemplate && motionCount === 0) return '&br()&br()Hit';
       if (motionCount > 1) return new Array(motionCount).join('&br()');
       return '';
     }
@@ -204,16 +230,28 @@
     return isFilled(data[key]) || isFilled(data[key + 'Hit']);
   }
 
-  function groupHasAnyData(data) {
-    var keys = ['battle1','battle2','battle3','skill1','skill2','skill3','ex','exHit','np','npHit'];
-    cardKinds.forEach(function (kind) {
-      var k = kind.toLowerCase();
-      for (var i = 1; i <= 3; i++) {
-        keys.push(k + i);
-        keys.push(k + i + 'Hit');
-      }
+  function specialIndices(data, kind) {
+    var found = {};
+    Object.keys(data).forEach(function (key) {
+      var match = key.match(new RegExp('^' + kind + '(\\d+)(?:Hit)?$'));
+      if (match) found[Number(match[1])] = true;
     });
-    return keys.some(function (key) { return isFilled(data[key]); });
+    return Object.keys(found).map(Number).sort(function (a, b) { return a - b; });
+  }
+
+  function specialEntries(data, kind) {
+    return specialIndices(data, kind).filter(function (index) {
+      return motionRowHasData(data, kind + index);
+    }).map(function (index) {
+      return {
+        motion: data[kind + index] || '',
+        hit: data[kind + index + 'Hit'] || ''
+      };
+    });
+  }
+
+  function groupHasAnyData(data) {
+    return Object.keys(data).some(function (key) { return isFilled(data[key]); });
   }
 
   function pushBattleAndSkill(lines, data, isDiff) {
@@ -231,37 +269,47 @@
     var skillKeys = ['skill1', 'skill2', 'skill3'];
     var emittedSkill = 0;
     skillKeys.forEach(function (key, idx) {
-      if (isDiff && !isFilled(data[key])) return;
+      if (!isFilled(data[key])) return;
       var firstCol = emittedSkill === 0 ? 'スキル使用' : '~';
-      lines.push('|' + firstCol + '|' + (idx + 1) + '|>|LEFT:' + plainCell(data[key], !isDiff) + '|');
+      lines.push('|' + firstCol + '|' + (idx + 1) + '|>|LEFT:' + plainCell(data[key], false) + '|');
       emittedSkill++;
     });
   }
 
-  function pushCardRows(lines, data, kind, isDiff) {
+  function pushCardRows(lines, data, kind) {
     var k = kind.toLowerCase();
     var emitted = 0;
     for (var i = 1; i <= 3; i++) {
       var key = k + i;
-      if (isDiff && !motionRowHasData(data, key)) continue;
+      if (!motionRowHasData(data, key)) continue;
       var firstCol = emitted === 0 ? kind : '~';
-      lines.push('|' + firstCol + '|' + i + '|' + motionCell(data[key], !isDiff) + '|' + hitCell(data[key + 'Hit'], data[key], !isDiff) + '|');
+      lines.push('|' + firstCol + '|' + i + '|' + motionCell(data[key]) + '|' + hitCell(data[key + 'Hit'], data[key]) + '|');
       emitted++;
     }
   }
 
-  function pushExNpRows(lines, data, isDiff) {
-    if (!isDiff || motionRowHasData(data, 'ex')) {
-      lines.push('|>|EX|' + motionCell(data.ex, !isDiff) + '|' + hitCell(data.exHit, data.ex, !isDiff) + '|');
-      lines.push('//|EX|1| →&br() →&br()|&br()&br()Hit|');
-      lines.push('//|~|2| →&br() →&br()|&br()&br()Hit|');
+  function pushSpecialRows(lines, data, kind) {
+    var label = kind === 'ex' ? 'EX' : '宝具';
+    var entries = specialEntries(data, kind);
+    if (!entries.length) return;
+
+    if (entries.length === 1) {
+      lines.push('|>|' + label + '|' + motionCell(entries[0].motion) + '|' + hitCell(entries[0].hit, entries[0].motion) + '|');
+      return;
     }
-    if (!isDiff || motionRowHasData(data, 'np')) {
-      lines.push('|>|宝具|' + motionCell(data.np, !isDiff) + '|' + hitCell(data.npHit, data.np, !isDiff) + '|');
-      lines.push('//|宝具|1| →&br() →&br()|&br()&br()Hit|');
-      lines.push('//|~|2| →&br() →&br()|&br()&br()Hit|');
-      lines.push('//|~|3| →&br() →&br()|&br()&br()Hit|');
-    }
+
+    entries.forEach(function (entry, idx) {
+      var firstCol = idx === 0 ? label : '~';
+      lines.push('|' + firstCol + '|' + (idx + 1) + '|' + motionCell(entry.motion) + '|' + hitCell(entry.hit, entry.motion) + '|');
+    });
+  }
+
+  function hasAnyMotion(data) {
+    var cardHas = cardKinds.some(function (kind) {
+      var k = kind.toLowerCase();
+      return [1,2,3].some(function (i) { return motionRowHasData(data, k + i); });
+    });
+    return cardHas || specialEntries(data, 'ex').length > 0 || specialEntries(data, 'np').length > 0;
   }
 
   function buildWikiBlock(title, data, isDiff) {
@@ -271,15 +319,11 @@
 
     pushBattleAndSkill(lines, data, isDiff);
 
-    var anyMotion = cardKinds.some(function (kind) {
-      var k = kind.toLowerCase();
-      return [1,2,3].some(function (i) { return motionRowHasData(data, k + i); });
-    }) || motionRowHasData(data, 'ex') || motionRowHasData(data, 'np');
-
-    if (!isDiff || anyMotion) {
+    if (hasAnyMotion(data)) {
       lines.push('|>|>|BGCOLOR(#E6E6FA):CENTER:Battle Motion|BGCOLOR(#E6E6FA):CENTER:Hit|');
-      cardKinds.forEach(function (kind) { pushCardRows(lines, data, kind, isDiff); });
-      pushExNpRows(lines, data, isDiff);
+      cardKinds.forEach(function (kind) { pushCardRows(lines, data, kind); });
+      pushSpecialRows(lines, data, 'ex');
+      pushSpecialRows(lines, data, 'np');
     }
 
     lines.push('');
@@ -288,17 +332,79 @@
     return lines.join('\n');
   }
 
-  function generate() {
-    var blocks = [buildWikiBlock(root.querySelector('#ra-title-1').value, getGroupData(1), false)];
-    for (var i = 2; i <= MAX_GROUPS; i++) {
-      if (!root.querySelector('#ra-enable-' + i).checked) continue;
-      var data = getGroupData(i);
-      if (!groupHasAnyData(data)) continue;
-      blocks.push(buildWikiBlock(root.querySelector('#ra-title-' + i).value, data, true));
+  function addSpecialVariant(groupIndex, kind, forcedIndex) {
+    var group = root.querySelector('.ra-group[data-group="' + groupIndex + '"]');
+    var list = group.querySelector('[data-special-list="' + kind + '"]');
+    var rows = Array.prototype.slice.call(list.querySelectorAll('[data-special-row="' + kind + '"]'));
+    var nextIndex = forcedIndex || (rows.reduce(function (max, row) {
+      return Math.max(max, Number(row.getAttribute('data-index')) || 0);
+    }, 0) + 1);
+
+    if (list.querySelector('[data-special-row="' + kind + '"][data-index="' + nextIndex + '"]')) return;
+    var holder = document.createElement('div');
+    holder.innerHTML = specialVariantHtml(kind, nextIndex);
+    list.appendChild(holder.firstChild);
+    updateSpecialRemoveButtons(groupIndex, kind);
+  }
+
+  function removeSpecialVariant(button) {
+    var row = button.closest('[data-special-row]');
+    var group = button.closest('.ra-group');
+    var kind = row.getAttribute('data-special-row');
+    var groupIndex = Number(group.getAttribute('data-group'));
+    var list = group.querySelector('[data-special-list="' + kind + '"]');
+    var rows = list.querySelectorAll('[data-special-row="' + kind + '"]');
+    if (rows.length <= 1) {
+      Array.prototype.forEach.call(row.querySelectorAll('[data-key]'), function (el) { el.value = ''; });
+      return;
     }
-    outputEl.value = blocks.join('\n\n');
-    save(false);
-    setStatus('生成しました。差分ブロックでは未入力行を省略しています。');
+    row.parentNode.removeChild(row);
+    updateSpecialRemoveButtons(groupIndex, kind);
+  }
+
+  function updateSpecialRemoveButtons(groupIndex, kind) {
+    var group = root.querySelector('.ra-group[data-group="' + groupIndex + '"]');
+    var rows = group.querySelectorAll('[data-special-row="' + kind + '"]');
+    Array.prototype.forEach.call(rows, function (row) {
+      var button = row.querySelector('[data-remove-special]');
+      button.style.display = rows.length > 1 ? '' : 'none';
+    });
+  }
+
+  function migrateSavedData(data) {
+    for (var g = 1; g <= MAX_GROUPS; g++) {
+      ['ex', 'np'].forEach(function (kind) {
+        var oldMotion = 'g' + g + '_' + kind;
+        var oldHit = oldMotion + 'Hit';
+        var newMotion = 'g' + g + '_' + kind + '1';
+        var newHit = newMotion + 'Hit';
+        if (Object.prototype.hasOwnProperty.call(data, oldMotion) && !Object.prototype.hasOwnProperty.call(data, newMotion)) {
+          data[newMotion] = data[oldMotion];
+        }
+        if (Object.prototype.hasOwnProperty.call(data, oldHit) && !Object.prototype.hasOwnProperty.call(data, newHit)) {
+          data[newHit] = data[oldHit];
+        }
+      });
+    }
+    return data;
+  }
+
+  function ensureSpecialRowsForRestore(data) {
+    for (var g = 1; g <= MAX_GROUPS; g++) {
+      ['ex', 'np'].forEach(function (kind) {
+        var maxIndex = 1;
+        var re = new RegExp('^g' + g + '_' + kind + '(\\d+)(?:Hit)?$');
+        Object.keys(data).forEach(function (key) {
+          var match = key.match(re);
+          if (match) maxIndex = Math.max(maxIndex, Number(match[1]));
+        });
+        for (var i = 2; i <= maxIndex; i++) addSpecialVariant(g, kind, i);
+      });
+    }
+  }
+
+  function allFieldElements() {
+    return Array.prototype.slice.call(root.querySelectorAll('input, textarea'));
   }
 
   function serialize() {
@@ -314,11 +420,31 @@
     return data;
   }
 
+  function generate() {
+    var blocks = [buildWikiBlock(root.querySelector('#ra-title-1').value, getGroupData(1), false)];
+    for (var i = 2; i <= MAX_GROUPS; i++) {
+      if (!root.querySelector('#ra-enable-' + i).checked) continue;
+      var data = getGroupData(i);
+      if (!groupHasAnyData(data)) continue;
+      blocks.push(buildWikiBlock(root.querySelector('#ra-title-' + i).value, data, true));
+    }
+    outputEl.value = blocks.join('\n\n');
+    save(false);
+    setStatus('生成しました。未入力のスキル・Q/A/B行は通常/差分とも省略しています。');
+  }
+
   function restore() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      var data = JSON.parse(raw);
+      if (!raw) {
+        for (var g = 1; g <= MAX_GROUPS; g++) {
+          updateSpecialRemoveButtons(g, 'ex');
+          updateSpecialRemoveButtons(g, 'np');
+        }
+        return;
+      }
+      var data = migrateSavedData(JSON.parse(raw));
+      ensureSpecialRowsForRestore(data);
       allFieldElements().forEach(function (el, i) {
         var key = el.id || ('field_' + i);
         if (el.hasAttribute('data-key')) {
@@ -329,6 +455,10 @@
         if (el.type === 'checkbox') el.checked = !!data[key];
         else el.value = data[key];
       });
+      for (var g = 1; g <= MAX_GROUPS; g++) {
+        updateSpecialRemoveButtons(g, 'ex');
+        updateSpecialRemoveButtons(g, 'np');
+      }
       setStatus('前回保存した入力内容を復元しました。');
     } catch (e) {
       setStatus('保存データの復元に失敗しました。', true);
@@ -344,9 +474,33 @@
     }
   }
 
+  function resetSpecialRows(groupIndex, kind) {
+    var group = root.querySelector('.ra-group[data-group="' + groupIndex + '"]');
+    var list = group.querySelector('[data-special-list="' + kind + '"]');
+    var rows = Array.prototype.slice.call(list.querySelectorAll('[data-special-row="' + kind + '"]'));
+    rows.forEach(function (row, idx) {
+      if (idx === 0) {
+        row.setAttribute('data-index', '1');
+        Array.prototype.forEach.call(row.querySelectorAll('[data-key]'), function (el) {
+          var suffix = /Hit$/.test(el.getAttribute('data-key')) ? 'Hit' : '';
+          el.setAttribute('data-key', kind + '1' + suffix);
+          el.value = '';
+        });
+        row.querySelector('.ra-motion-name').textContent = (kind === 'ex' ? 'EX' : '宝具') + ' 1';
+      } else row.parentNode.removeChild(row);
+    });
+    updateSpecialRemoveButtons(groupIndex, kind);
+  }
+
   function clearAll() {
     if (!window.confirm('入力内容と保存データをすべて消去します。よろしいですか？')) return;
     localStorage.removeItem(STORAGE_KEY);
+
+    for (var g = 1; g <= MAX_GROUPS; g++) {
+      resetSpecialRows(g, 'ex');
+      resetSpecialRows(g, 'np');
+    }
+
     allFieldElements().forEach(function (el) {
       if (el.id === 'ra-title-1') el.value = 'モーション一覧';
       else if (el.id === 'ra-title-2') el.value = '第3再臨以降';
@@ -356,6 +510,7 @@
       else if (el.id === 'ra-output') el.value = '';
       else if (el.hasAttribute('data-key')) el.value = '';
     });
+
     outputEl.value = '';
     applyGroupVisibility();
     setStatus('クリアしました。');
@@ -394,7 +549,22 @@
   root.querySelector('#ra-copy').addEventListener('click', copyOutput);
   root.querySelector('#ra-save').addEventListener('click', function () { save(true); });
   root.querySelector('#ra-clear').addEventListener('click', clearAll);
-  for (var i = 2; i <= MAX_GROUPS; i++) root.querySelector('#ra-enable-' + i).addEventListener('change', applyGroupVisibility);
+
+  root.addEventListener('click', function (event) {
+    var add = event.target.closest('[data-add-special]');
+    if (add && root.contains(add)) {
+      var group = add.closest('.ra-group');
+      addSpecialVariant(Number(group.getAttribute('data-group')), add.getAttribute('data-add-special'));
+      return;
+    }
+
+    var remove = event.target.closest('[data-remove-special]');
+    if (remove && root.contains(remove)) removeSpecialVariant(remove);
+  });
+
+  for (var i = 2; i <= MAX_GROUPS; i++) {
+    root.querySelector('#ra-enable-' + i).addEventListener('change', applyGroupVisibility);
+  }
 
   restore();
   applyGroupVisibility();
