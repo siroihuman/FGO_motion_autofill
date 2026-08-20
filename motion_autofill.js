@@ -3,6 +3,7 @@
 
   var APP_ID = 'ra-motion-autofill';
   var STORAGE_KEY = 'ra-motion-autofill-v1';
+  var MAX_GROUPS = 4; // 通常1 + 差分最大3
 
   if (document.getElementById(APP_ID)) return;
 
@@ -20,11 +21,11 @@
     '#' + APP_ID + ' .ra-field{display:flex;flex-direction:column;gap:4px}',
     '#' + APP_ID + ' .ra-field.ra-wide{grid-column:1/-1}',
     '#' + APP_ID + ' label{font-size:13px;font-weight:600}',
-    '#' + APP_ID + ' input[type=text],#' + APP_ID + ' input[type=number],#' + APP_ID + ' textarea{width:100%;border:1px solid #cbd3dc;border-radius:6px;padding:8px;background:#fff;color:#222;font:inherit}',
+    '#' + APP_ID + ' input[type=text],#' + APP_ID + ' textarea{width:100%;border:1px solid #cbd3dc;border-radius:6px;padding:8px;background:#fff;color:#222;font:inherit}',
     '#' + APP_ID + ' textarea{min-height:72px;resize:vertical;line-height:1.5}',
-    '#' + APP_ID + ' .ra-motion-row{display:grid;grid-template-columns:90px 1fr 84px;gap:8px;align-items:start;margin:8px 0}',
+    '#' + APP_ID + ' .ra-motion-row{display:grid;grid-template-columns:90px 1fr 120px;gap:8px;align-items:start;margin:8px 0}',
     '#' + APP_ID + ' .ra-motion-name{font-weight:700;padding-top:9px}',
-    '#' + APP_ID + ' .ra-hit input{text-align:center}',
+    '#' + APP_ID + ' .ra-hit textarea{text-align:center;min-height:72px}',
     '#' + APP_ID + ' .ra-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}',
     '#' + APP_ID + ' button{border:1px solid #9aa7b4;background:#f5f7f9;color:#222;border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:600}',
     '#' + APP_ID + ' button:hover{background:#e9edf1}',
@@ -33,7 +34,7 @@
     '#' + APP_ID + ' .ra-check{display:flex;align-items:center;gap:8px;font-size:13px}',
     '#' + APP_ID + ' .ra-output{min-height:320px;font-family:Consolas,"Noto Sans Mono CJK JP",monospace;white-space:pre;tab-size:2}',
     '#' + APP_ID + ' .ra-status{min-height:20px;font-size:13px;color:#2c6b2f}',
-    '@media(max-width:760px){#' + APP_ID + ' .ra-grid{grid-template-columns:1fr}#' + APP_ID + ' .ra-motion-row{grid-template-columns:72px 1fr 66px}#' + APP_ID + '{padding:10px}}'
+    '@media(max-width:760px){#' + APP_ID + ' .ra-grid{grid-template-columns:1fr}#' + APP_ID + ' .ra-motion-row{grid-template-columns:72px 1fr 92px}#' + APP_ID + '{padding:10px}}'
   ].join('');
   document.head.appendChild(style);
 
@@ -41,14 +42,19 @@
   root.id = APP_ID;
   root.innerHTML = [
     '<h2>FGO モーション・オートフィル</h2>',
-    '<p class="ra-note">各モーション欄は「1行＝1工程」で入力してください。複数行は自動で「 → 」につなぎ、@wiki表のセル内では <code>&amp;br()</code> に変換します。空欄は「－」で出力します。</p>',
+    '<p class="ra-note">モーション欄とHit欄は「1行＝1工程」です。モーションの1行目とHitの1行目、2行目同士……が対応します。Hit欄には数字または「2+3」のような内訳を入力すると、出力時に自動で「Hit」を付けます。</p>',
 
     '<details open>',
       '<summary>出力設定</summary>',
       '<div class="ra-body ra-grid">',
         '<div class="ra-field"><label for="ra-title-1">通常ブロック名</label><input id="ra-title-1" type="text" value="モーション一覧"></div>',
-        '<div class="ra-field"><label for="ra-title-2">差分ブロック名</label><input id="ra-title-2" type="text" value="第3再臨以降"></div>',
-        '<div class="ra-field ra-wide"><label class="ra-check"><input id="ra-enable-2" type="checkbox" checked> 差分モーションのブロックも出力する</label></div>',
+        '<div></div>',
+        '<div class="ra-field"><label for="ra-title-2">差分1 ブロック名</label><input id="ra-title-2" type="text" value="第3再臨以降"></div>',
+        '<div class="ra-field"><label class="ra-check"><input id="ra-enable-2" type="checkbox" checked> 差分1を出力する</label></div>',
+        '<div class="ra-field"><label for="ra-title-3">差分2 ブロック名</label><input id="ra-title-3" type="text" value="差分モーション2"></div>',
+        '<div class="ra-field"><label class="ra-check"><input id="ra-enable-3" type="checkbox"> 差分2を出力する</label></div>',
+        '<div class="ra-field"><label for="ra-title-4">差分3 ブロック名</label><input id="ra-title-4" type="text" value="差分モーション3"></div>',
+        '<div class="ra-field"><label class="ra-check"><input id="ra-enable-4" type="checkbox"> 差分3を出力する</label></div>',
       '</div>',
     '</details>',
 
@@ -74,7 +80,6 @@
   var groupsHost = root.querySelector('#ra-groups');
   var statusEl = root.querySelector('#ra-status');
   var outputEl = root.querySelector('#ra-output');
-
   var cardKinds = ['Buster', 'Arts', 'Quick'];
 
   function escHtml(s) {
@@ -88,11 +93,11 @@
     cardKinds.forEach(function (kind) {
       for (var i = 1; i <= 3; i++) {
         var key = kind.toLowerCase() + i;
-        rows += motionInputHtml(index, key, kind + ' ' + i);
+        rows += motionInputHtml(key, kind + ' ' + i);
       }
     });
-    rows += motionInputHtml(index, 'ex', 'EX');
-    rows += motionInputHtml(index, 'np', '宝具');
+    rows += motionInputHtml('ex', 'EX');
+    rows += motionInputHtml('np', '宝具');
 
     return [
       '<details class="ra-group" data-group="' + index + '" ' + (index === 1 ? 'open' : '') + '>',
@@ -107,24 +112,29 @@
             '<div class="ra-field"><label>スキル使用 3</label><textarea data-key="skill3"></textarea></div>',
           '</div>',
           '<h3 style="margin:16px 0 6px;font-size:16px">Battle Motion</h3>',
-          '<div class="ra-note">モーション欄は改行ごとに工程を分けて入力します。Hit数は数字だけ入力してください。</div>',
+          '<div class="ra-note">モーションとHitは行番号で対応します。Hitがない工程はHit欄を空行にしてください。例：1行目「2」、2行目「1+1」→「2Hit」「1+1Hit」。</div>',
           rows,
         '</div>',
       '</details>'
     ].join('');
   }
 
-  function motionInputHtml(groupIndex, key, label) {
+  function motionInputHtml(key, label) {
     return [
       '<div class="ra-motion-row">',
         '<div class="ra-motion-name">' + escHtml(label) + '</div>',
-        '<textarea data-key="' + key + '" aria-label="' + escHtml(label) + ' モーション"></textarea>',
-        '<div class="ra-hit"><input data-key="' + key + 'Hit" type="number" min="0" step="1" placeholder="Hit" aria-label="' + escHtml(label) + ' Hit数"></div>',
+        '<textarea data-key="' + key + '" aria-label="' + escHtml(label) + ' モーション" placeholder="1行＝1工程"></textarea>',
+        '<div class="ra-hit"><textarea data-key="' + key + 'Hit" aria-label="' + escHtml(label) + ' Hit数" placeholder="2\n1+1"></textarea></div>',
       '</div>'
     ].join('');
   }
 
-  groupsHost.innerHTML = groupHtml(1, '通常モーション') + groupHtml(2, '差分モーション');
+  groupsHost.innerHTML = [
+    groupHtml(1, '通常モーション'),
+    groupHtml(2, '差分モーション1'),
+    groupHtml(3, '差分モーション2'),
+    groupHtml(4, '差分モーション3')
+  ].join('');
 
   function allFieldElements() {
     return Array.prototype.slice.call(root.querySelectorAll('input, textarea'));
@@ -135,15 +145,22 @@
     statusEl.style.color = isError ? '#b42318' : '#2c6b2f';
   }
 
+  function normalizeNewlines(value) {
+    return String(value == null ? '' : value).replace(/\r\n?/g, '\n');
+  }
+
   function wikiSafe(value) {
-    return String(value || '')
-      .replace(/\r\n?/g, '\n')
-      .replace(/\|/g, '&#124;')
-      .trim();
+    return normalizeNewlines(value).replace(/\|/g, '&#124;').trim();
+  }
+
+  function motionLines(value) {
+    return normalizeNewlines(value).split('\n').map(function (s) {
+      return s.trim().replace(/\|/g, '&#124;');
+    }).filter(Boolean);
   }
 
   function motionWiki(value) {
-    var lines = wikiSafe(value).split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+    var lines = motionLines(value);
     if (!lines.length) return '－';
     return lines.join(' →&br()');
   }
@@ -163,9 +180,27 @@
     return data;
   }
 
-  function hitCell(value) {
-    var n = String(value == null ? '' : value).trim();
-    return n === '' ? '－' : n;
+  function formatHitToken(value) {
+    var token = String(value == null ? '' : value).trim().replace(/\|/g, '&#124;');
+    if (!token) return '';
+    if (/Hit$/i.test(token)) return token.replace(/Hit$/i, 'Hit');
+    return token + 'Hit';
+  }
+
+  function hitCell(hitValue, motionValue) {
+    var raw = normalizeNewlines(hitValue);
+    var hitLines = raw === '' ? [] : raw.split('\n').map(formatHitToken);
+    var motionCount = motionLines(motionValue).length;
+    var count = Math.max(motionCount, hitLines.length);
+    var hasHit = hitLines.some(function (line) { return line !== ''; });
+
+    if (!hasHit) return '－';
+
+    var output = [];
+    for (var i = 0; i < count; i++) {
+      output.push(hitLines[i] || '');
+    }
+    return output.join('&br()');
   }
 
   function buildWikiBlock(title, data) {
@@ -181,26 +216,26 @@
     lines.push('|2|' + plainWiki(data.skill2) + '|');
     lines.push('|3|' + plainWiki(data.skill3) + '|');
     lines.push('');
-    lines.push('|BGCOLOR(#e6e6fa):CENTER:90|BGCOLOR(#f5fffa):CENTER:35|BGCOLOR(#f5fffa):LEFT:500|BGCOLOR(#f5fffa):CENTER:55|c');
+    lines.push('|BGCOLOR(#e6e6fa):CENTER:90|BGCOLOR(#f5fffa):CENTER:35|BGCOLOR(#f5fffa):LEFT:500|BGCOLOR(#f5fffa):CENTER:85|c');
     lines.push('|>|>|BGCOLOR(#e6e6fa):CENTER:&font(b,110%){Battle Motion}|BGCOLOR(#e6e6fa):CENTER:&font(b,110%){Hit}|');
 
     cardKinds.forEach(function (kind) {
       var k = kind.toLowerCase();
-      lines.push('|' + kind + '|1|' + motionWiki(data[k + '1']) + '|' + hitCell(data[k + '1Hit']) + '|');
-      lines.push('|~|2|' + motionWiki(data[k + '2']) + '|' + hitCell(data[k + '2Hit']) + '|');
-      lines.push('|~|3|' + motionWiki(data[k + '3']) + '|' + hitCell(data[k + '3Hit']) + '|');
+      lines.push('|' + kind + '|1|' + motionWiki(data[k + '1']) + '|' + hitCell(data[k + '1Hit'], data[k + '1']) + '|');
+      lines.push('|~|2|' + motionWiki(data[k + '2']) + '|' + hitCell(data[k + '2Hit'], data[k + '2']) + '|');
+      lines.push('|~|3|' + motionWiki(data[k + '3']) + '|' + hitCell(data[k + '3Hit'], data[k + '3']) + '|');
     });
-    lines.push('|EX|－|' + motionWiki(data.ex) + '|' + hitCell(data.exHit) + '|');
-    lines.push('|宝具|－|' + motionWiki(data.np) + '|' + hitCell(data.npHit) + '|');
+    lines.push('|EX|－|' + motionWiki(data.ex) + '|' + hitCell(data.exHit, data.ex) + '|');
+    lines.push('|宝具|－|' + motionWiki(data.np) + '|' + hitCell(data.npHit, data.np) + '|');
     lines.push('}');
     return lines.join('\n');
   }
 
   function generate() {
     var blocks = [];
-    blocks.push(buildWikiBlock(root.querySelector('#ra-title-1').value, getGroupData(1)));
-    if (root.querySelector('#ra-enable-2').checked) {
-      blocks.push(buildWikiBlock(root.querySelector('#ra-title-2').value, getGroupData(2)));
+    for (var i = 1; i <= MAX_GROUPS; i++) {
+      if (i > 1 && !root.querySelector('#ra-enable-' + i).checked) continue;
+      blocks.push(buildWikiBlock(root.querySelector('#ra-title-' + i).value, getGroupData(i)));
     }
     outputEl.value = blocks.join('\n\n');
     save(false);
@@ -256,11 +291,15 @@
     allFieldElements().forEach(function (el) {
       if (el.id === 'ra-title-1') el.value = 'モーション一覧';
       else if (el.id === 'ra-title-2') el.value = '第3再臨以降';
+      else if (el.id === 'ra-title-3') el.value = '差分モーション2';
+      else if (el.id === 'ra-title-4') el.value = '差分モーション3';
       else if (el.id === 'ra-enable-2') el.checked = true;
+      else if (el.id === 'ra-enable-3' || el.id === 'ra-enable-4') el.checked = false;
       else if (el.id === 'ra-output') el.value = '';
       else if (el.hasAttribute('data-key')) el.value = '';
     });
     outputEl.value = '';
+    applyGroupVisibility();
     setStatus('クリアしました。');
   }
 
@@ -289,15 +328,23 @@
     }
   }
 
+  function applyGroupVisibility() {
+    for (var i = 2; i <= MAX_GROUPS; i++) {
+      var checkbox = root.querySelector('#ra-enable-' + i);
+      var group = root.querySelector('.ra-group[data-group="' + i + '"]');
+      group.style.display = checkbox.checked ? '' : 'none';
+    }
+  }
+
   root.querySelector('#ra-generate').addEventListener('click', generate);
   root.querySelector('#ra-copy').addEventListener('click', copyOutput);
   root.querySelector('#ra-save').addEventListener('click', function () { save(true); });
   root.querySelector('#ra-clear').addEventListener('click', clearAll);
-  root.querySelector('#ra-enable-2').addEventListener('change', function () {
-    var g2 = root.querySelector('.ra-group[data-group="2"]');
-    g2.style.display = this.checked ? '' : 'none';
-  });
+
+  for (var i = 2; i <= MAX_GROUPS; i++) {
+    root.querySelector('#ra-enable-' + i).addEventListener('change', applyGroupVisibility);
+  }
 
   restore();
-  root.querySelector('#ra-enable-2').dispatchEvent(new Event('change'));
+  applyGroupVisibility();
 }());
