@@ -48,7 +48,7 @@
   root.id = APP_ID;
   root.innerHTML = [
     '<h2>FGO モーション・オートフィル</h2>',
-    '<p class="ra-note">通常モーション1種と差分モーション最大2種を生成します。スキル・Buster・Arts・Quickは通常/差分とも未入力行を出力しません。EX・宝具は「追加」で必要数だけ増やせます。モーション欄とHit欄は「1行＝1工程」で対応し、Hit欄の数字には出力時に自動で「Hit」を付けます。</p>',
+    '<p class="ra-note">通常モーション1種と差分モーション最大2種を生成します。Battle Character・スキル・Buster・Arts・Quickは通常/差分とも未入力行を出力しません。EX・宝具は「追加」で必要数だけ増やせます。モーション欄とHit欄は「1行＝1工程」で対応し、Hit欄の数字には出力時に自動で「Hit」を付けます。</p>',
     '<details open>',
       '<summary>出力設定</summary>',
       '<div class="ra-body ra-grid">',
@@ -259,11 +259,11 @@
     var battleKeys = ['battle1', 'battle2', 'battle3'];
     var anyBattle = battleKeys.some(function (key) { return isFilled(data[key]); });
 
-    if (!isDiff || anyBattle) {
+    if (anyBattle) {
       lines.push('|>|>|>|BGCOLOR(#E6E6FA):CENTER:Battle Character|');
       battleKeys.forEach(function (key, idx) {
-        if (isDiff && !isFilled(data[key])) return;
-        lines.push('|>|第' + (idx + 1) + '段階|>|LEFT:' + plainCell(data[key], !isDiff) + '|');
+        if (!isFilled(data[key])) return;
+        lines.push('|>|第' + (idx + 1) + '段階|>|LEFT:' + plainCell(data[key], false) + '|');
       });
     }
 
@@ -431,7 +431,7 @@
     }
     outputEl.value = blocks.join('\n\n');
     save(false);
-    setStatus('生成しました。未入力のスキル・Q/A/B行は通常/差分とも省略しています。');
+    setStatus('生成しました。未入力のBattle Character・スキル・Q/A/B行は通常/差分とも省略しています。');
   }
 
   function restore() {
